@@ -30,7 +30,7 @@ func (s sec) parseMul() int {
 	var total int
 	for _, part := range parts {
 		var leftIndex, mdIndex, rightIndex int = -1, -1, -1
-		fmt.Println(part)
+		// fmt.Println(part)
 		for i, c := range part {
 			if leftIndex != -1 && rightIndex != -1 && mdIndex != -1 {
 				break
@@ -45,13 +45,50 @@ func (s sec) parseMul() int {
 				mdIndex = i
 			}
 		}
-		fmt.Printf("left: %d,md: %d,right: %d\n", leftIndex, mdIndex, rightIndex)
 		if leftIndex != -1 && rightIndex != -1 && mdIndex != -1 &&
 			rightIndex > mdIndex && mdIndex > leftIndex {
 			leftNumber := atoi(part[leftIndex+1 : mdIndex])
 			rightNumber := atoi(part[mdIndex+1 : rightIndex])
-			fmt.Printf("%d,%d\n", leftNumber, rightNumber)
+			// fmt.Printf("%d,%d\n", leftNumber, rightNumber)
 			total += leftNumber * rightNumber
+		}
+	}
+	return total
+}
+
+func (s sec) parseAll() int {
+	parts := strings.Split(s.line, "mul")
+	var total int
+	isCanMul := true
+	for _, part := range parts {
+		var leftIndex, mdIndex, rightIndex int = -1, -1, -1
+		for i, c := range part {
+			if leftIndex != -1 && rightIndex != -1 && mdIndex != -1 {
+				break
+			}
+			if c == '(' && leftIndex == -1 && i == 0 {
+				leftIndex = i
+			}
+			if c == ')' && rightIndex == -1 {
+				rightIndex = i
+			}
+			if c == ',' && mdIndex == -1 {
+				mdIndex = i
+			}
+		}
+		if leftIndex != -1 && rightIndex != -1 && mdIndex != -1 &&
+			rightIndex > mdIndex && mdIndex > leftIndex && isCanMul {
+			leftNumber := atoi(part[leftIndex+1 : mdIndex])
+			rightNumber := atoi(part[mdIndex+1 : rightIndex])
+			total += leftNumber * rightNumber
+		}
+		if strings.Contains(part, "don't()") {
+			fmt.Println("N")
+			isCanMul = false
+		}
+		if strings.Contains(part, "do()") {
+			fmt.Println("Y")
+			isCanMul = true
 		}
 	}
 	return total
@@ -73,6 +110,23 @@ func p1() {
 	println("p1: ", total)
 }
 
+func p2() {
+	txt := input.NewTXTFile("03.txt")
+	var section []sec
+	txt.ReadByLineEx(context.Background(), func(i int, line string) error {
+		section = append(section, sec{
+			line: line,
+		})
+		return nil
+	})
+	var total int
+	for _, s := range section {
+		total += s.parseAll()
+	}
+	println("p2: ", total)
+}
+
 func main() {
 	p1()
+	p2()
 }
