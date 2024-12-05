@@ -27,16 +27,6 @@ var findXMAS = func(c, v string) bool {
 	return false
 }
 
-var findMAS = func(c, v string) bool {
-	switch c {
-	case "M":
-		return v == "A"
-	case "A":
-		return v == "S"
-	}
-	return false
-}
-
 type direction int
 
 const (
@@ -86,32 +76,6 @@ func getNext(v grid.Vec, d direction) []grid.Vec {
 		}
 	}
 	return nil
-}
-
-func (p *panel) traverse2(
-	ctx context.Context,
-	start grid.Vec,
-	d direction,
-	find func(c, v string) bool,
-	finalPath []grid.Vec,
-) {
-	v, ok := p.g.Get(start)
-	if !ok {
-		return
-	}
-	if len(finalPath) == 3 {
-		fmt.Printf("finalPath: %v\n", finalPath)
-		p.paths = append(p.paths, finalPath)
-		return
-	}
-	next := getNext(start, d)
-	for _, n := range next {
-		vv, ok := p.g.Get(n)
-		if ok && find(v, vv) {
-			finalPath = append(finalPath, n)
-			p.traverse(ctx, n, d, find, finalPath)
-		}
-	}
 }
 
 func (p *panel) traverse(
@@ -192,20 +156,64 @@ func p2() {
 	p := panel{
 		g: g,
 	}
+	var total int
 	p.g.ForEach(func(v grid.Vec, s string) {
-		if s == "M" {
-			directions := []direction{
-				directionUpRight,
-				directionUpLeft,
-				directionDownRight,
-				directionDownLeft,
+		if s == "A" {
+			// top right
+			tr := v.Add(grid.Vec{X: 1, Y: -1})
+			trv, ok := p.g.Get(tr)
+			if !ok {
+				return
 			}
-			for _, d := range directions {
-				p.traverse2(ctx, v, d, findMAS, []grid.Vec{v})
+			// top left
+			tl := v.Add(grid.Vec{X: -1, Y: -1})
+			tlv, ok := p.g.Get(tl)
+			if !ok {
+				return
+			}
+			// bottom right
+			br := v.Add(grid.Vec{X: 1, Y: 1})
+			brv, ok := p.g.Get(br)
+			if !ok {
+				return
+			}
+			// bottom left
+			bl := v.Add(grid.Vec{X: -1, Y: 1})
+			blv, ok := p.g.Get(bl)
+			if !ok {
+				return
+			}
+			// PATTERN 1
+			// M S
+			//  A
+			// M S
+			if trv == "S" && blv == "M" && tlv == "M" && brv == "S" {
+				total++
+			}
+			// PATTERN 2
+			// M M
+			//  A
+			// S S
+			if trv == "M" && blv == "S" && tlv == "M" && brv == "S" {
+				total++
+			}
+			// PATTERN 3
+			// S M
+			//  A
+			// S M
+			if trv == "M" && blv == "S" && tlv == "S" && brv == "M" {
+				total++
+			}
+			// PATTERN 4
+			// S S
+			//  A
+			// M M
+			if trv == "S" && blv == "M" && tlv == "S" && brv == "M" {
+				total++
 			}
 		}
 	})
-	fmt.Printf("p2: %d\n", len(p.paths))
+	fmt.Printf("p2: %d\n", total)
 }
 
 func main() {
