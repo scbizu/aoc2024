@@ -90,7 +90,7 @@ func (p *panel) traverse(
 		return
 	}
 	if len(finalPath) == 4 {
-		fmt.Printf("finalPath: %v\n", finalPath)
+		// fmt.Printf("finalPath: %v\n", finalPath)
 		p.paths = append(p.paths, finalPath)
 		return
 	}
