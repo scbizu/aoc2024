@@ -114,14 +114,30 @@ func p2() {
 			ck.rules[p.r].Add(p.l)
 		}
 	}
+	var total int
 	for _, u := range updates {
 		for i := 0; i < len(u.pages)-1; i++ {
 			r, ok := ck.rules[u.pages[i]]
 			if ok && r.HasAny([]int{u.pages[i+1]}...) {
+				nu := fixUpdate(u, ck)
+				total += nu.pages[len(nu.pages)/2]
 				break
 			}
 		}
 	}
+	fmt.Printf("p2: %d\n", total)
+}
+
+func fixUpdate(u update, ck checker) update {
+	for i := 0; i < len(u.pages)-1; i++ {
+		r, ok := ck.rules[u.pages[i]]
+		if ok && r.HasAny([]int{u.pages[i+1]}...) {
+			// swap i and i+1
+			u.pages[i], u.pages[i+1] = u.pages[i+1], u.pages[i]
+			u = fixUpdate(u, ck)
+		}
+	}
+	return u
 }
 
 func main() {
