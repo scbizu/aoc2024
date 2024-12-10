@@ -78,7 +78,7 @@ func (m maze) walk2() int {
 
 func p1(ctx context.Context) {
 	txt := input.NewTXTFile("10.txt")
-	g := grid.NewVecMatrix[uint8]()
+	g := grid.NewVecMatrix[byte]()
 	txt.ReadByLineEx(ctx, func(i int, line string) error {
 		for j, c := range line {
 			g.Add(grid.Vec{
