@@ -18,12 +18,50 @@ type block struct {
 	plants []grid.Vec
 	v      byte
 	// 内接
-	insideLineaer int
-	side          int
+	insideLinear int
+	side         int
 }
 
 func (b block) String() string {
 	return fmt.Sprintf("block: %d side: %d\n", len(b.plants), b.side)
+}
+
+func (g *garden) Group(ctx context.Context) []block {
+	var blocks []block
+	g.plants.ForEach(func(v grid.Vec, b byte) {
+		if _, ok := g.visited[v]; ok {
+			return
+		}
+		blk := block{
+			v: b,
+			plants: []grid.Vec{
+				v,
+			},
+		}
+		q := queue.NewQueue[grid.Vec]()
+		q.Push(v)
+		g.visited[v] = struct{}{}
+		for q.Len() > 0 {
+			p := q.Pop()
+			for _, next := range g.plants.GetNeighbor(p) {
+				n, ok := g.plants.Get(next)
+				if !ok {
+					continue
+				}
+				_, ok = g.visited[next]
+				if n == b {
+					if !ok {
+						q.Push(next)
+						blk.plants = append(blk.plants, next)
+					}
+					blk.insideLinear += 1
+					g.visited[next] = struct{}{}
+				}
+			}
+		}
+		blocks = append(blocks, blk)
+	})
+	return blocks
 }
 
 func (blk *block) handleCorner(
@@ -149,7 +187,29 @@ func pick2(vecs []grid.Vec) [][]grid.Vec {
 	return group
 }
 
+func countPerimeter(blk block) int {
+	return len(blk.plants)*4 - blk.insideLinear
+}
+
 func p1(ctx context.Context) {
+	txt := input.NewTXTFile("12.txt")
+	g := garden{
+		plants:  grid.NewVecMatrix[byte](),
+		visited: make(map[grid.Vec]struct{}),
+	}
+	txt.ReadByLineEx(ctx, func(i int, line string) error {
+		for j, c := range line {
+			g.plants.Add(grid.Vec{X: j, Y: i}, byte(c))
+		}
+		return nil
+	})
+	blocks := g.Group(ctx)
+	// fmt.Printf("blocks: %v\n", blocks)
+	var total int
+	for _, blk := range blocks {
+		total += countPerimeter(blk) * len(blk.plants)
+	}
+	fmt.Printf("p1: %d\n", total)
 }
 
 func p2(ctx context.Context) {
@@ -175,6 +235,6 @@ func p2(ctx context.Context) {
 
 func main() {
 	ctx := context.Background()
-	// p1(ctx)
+	p1(ctx)
 	p2(ctx)
 }
