@@ -1,6 +1,6 @@
 module github.com/scbizu/aoc2024
 
-go 1.22.5
+go 1.23
 
 require github.com/magejiCoder/magejiAoc v0.0.14
 
