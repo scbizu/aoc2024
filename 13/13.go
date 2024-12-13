@@ -10,19 +10,20 @@ import (
 )
 
 type Claw struct {
-	A, B  Axia
-	Prize Axia
+	A, B  Axis
+	Prize Axis
+	cache map[try]struct{}
 }
 
 func (c Claw) String() string {
 	return fmt.Sprintf("A: %v, B: %v, Prize: %v", c.A, c.B, c.Prize)
 }
 
-func (ax Axia) String() string {
+func (ax Axis) String() string {
 	return fmt.Sprintf("X+%d, Y+%d", ax.x, ax.y)
 }
 
-type Axia struct {
+type Axis struct {
 	x, y int
 }
 
@@ -31,40 +32,69 @@ type try struct {
 	rx, ry int
 }
 
-func (c Claw) Guess(ctx context.Context) int {
+func (c *Claw) Guess(ctx context.Context) int {
 	t0 := try{
-		a:  100,
-		b:  100,
+		a:  0,
+		b:  0,
 		rx: 0,
 		ry: 0,
 	}
+	min := 3*100 + 100
 	q := queue.NewQueue[try]()
 	q.Push(t0)
 	for q.Len() > 0 {
 		t := q.Pop()
-		if t.rx == c.Prize.x && t.ry == c.Prize.y {
-			return t.a + t.b
+		if _, ok := c.cache[t]; ok {
+			continue
 		}
-		if t.a > 0 {
+		// fmt.Printf("%v\n", t)
+		if t.rx > c.Prize.x || t.ry > c.Prize.y {
+			continue
+		}
+		if t.rx == c.Prize.x && t.ry == c.Prize.y {
+			if 3*t.a+t.b < min {
+				min = 3*t.a + t.b
+			}
+		}
+		// 三种情况
+		// 1. push A
+		// 2. push B
+		// 3. push A + push B
+		if t.a < 100 && t.b < 100 {
+			// push A + push B
+			q.Push(try{
+				a:  t.a + 1,
+				b:  t.b + 1,
+				rx: t.rx + c.A.x + c.B.x,
+				ry: t.ry + c.A.y + c.B.y,
+			})
+			c.cache[t] = struct{}{}
+		}
+		if t.a < 100 {
 			// push A
 			q.Push(try{
-				a:  t.a - 1,
+				a:  t.a + 1,
 				b:  t.b,
 				rx: t.rx + c.A.x,
 				ry: t.ry + c.A.y,
 			})
+			c.cache[t] = struct{}{}
 		}
-		if t.b > 0 {
+		if t.b < 100 {
 			// push B
 			q.Push(try{
 				a:  t.a,
-				b:  t.b - 1,
+				b:  t.b + 1,
 				rx: t.rx + c.B.x,
 				ry: t.ry + c.B.y,
 			})
+			c.cache[t] = struct{}{}
 		}
 	}
-	return 0
+	if min == 400 {
+		return 0
+	}
+	return min
 }
 
 func parseToClaw(cw *Claw, s string) {
@@ -81,7 +111,7 @@ func parseToClaw(cw *Claw, s string) {
 		if err != nil {
 			panic(err)
 		}
-		cw.A = Axia{xint, yint}
+		cw.A = Axis{xint, yint}
 	case strings.Contains(s, "Button B:"):
 		sub := strings.TrimPrefix(s, "Button B: ")
 		xy := strings.Split(sub, ", ")
@@ -94,37 +124,43 @@ func parseToClaw(cw *Claw, s string) {
 		if err != nil {
 			panic(err)
 		}
-		cw.B = Axia{xint, yint}
+		cw.B = Axis{xint, yint}
 	case strings.Contains(s, "Prize: "):
 		sub := strings.TrimPrefix(s, "Prize: ")
 		xy := strings.Split(sub, ", ")
 		var xint, yint int
-		_, err := fmt.Sscanf(xy[0], "X+%d", &xint)
+		fmt.Printf("xy: %v\n", xy)
+		_, err := fmt.Sscanf(xy[0], "X=%d", &xint)
 		if err != nil {
 			panic(err)
 		}
-		_, err = fmt.Sscanf(xy[1], "Y+%d", &yint)
+		_, err = fmt.Sscanf(xy[1], "Y=%d", &yint)
 		if err != nil {
 			panic(err)
 		}
-		cw.Prize = Axia{xint, yint}
+		cw.Prize = Axis{xint, yint}
 	}
 }
 
 func p1(ctx context.Context) {
 	txt := input.NewTXTFile("13.txt")
-	var cws []Claw
+	var cws []*Claw
 	txt.ReadByBlock(ctx, "\n\n", func(block []string) error {
-		cw := Claw{}
 		fmt.Printf("block: %v\n", len(block))
 		for _, s := range block {
-			parseToClaw(&cw, s)
+			cw := Claw{
+				cache: make(map[try]struct{}),
+			}
+			parts := strings.Split(s, "\n")
+			for _, s := range parts {
+				parseToClaw(&cw, s)
+			}
+			cws = append(cws, &cw)
 		}
-		cws = append(cws, cw)
 		return nil
 	})
 
-	fmt.Printf("claw: %v\n", cws)
+	// fmt.Printf("claw: %v\n", cws)
 
 	var total int
 	for _, cw := range cws {
