@@ -32,6 +32,24 @@ type try struct {
 	rx, ry int
 }
 
+func (c *Claw) Guess2(ctx context.Context) int {
+	c.Prize.x += 10000000000000
+	c.Prize.y += 10000000000000
+	// 使用克莱姆法则获得数学解
+	// | prize.x b.x |
+	// | prize.y b.y |
+	// ---------------
+	// | a.x b.x |     <= det
+	// | a.y b.y |
+	n1 := (c.Prize.x*c.B.y - c.Prize.y*c.B.x) / (c.A.x*c.B.y - c.A.y*c.B.x)
+	n2 := (c.Prize.y*c.A.x - c.Prize.x*c.A.y) / (c.A.x*c.B.y - c.A.y*c.B.x)
+	if n1*c.A.x+n2*c.B.x == c.Prize.x && n1*c.A.y+n2*c.B.y == c.Prize.y {
+		// fmt.Printf("guess2: %d\n", 3*n1+n2)
+		return 3*n1 + n2
+	}
+	return 0
+}
+
 func (c *Claw) Guess(ctx context.Context) int {
 	t0 := try{
 		a:  0,
@@ -129,7 +147,7 @@ func parseToClaw(cw *Claw, s string) {
 		sub := strings.TrimPrefix(s, "Prize: ")
 		xy := strings.Split(sub, ", ")
 		var xint, yint int
-		fmt.Printf("xy: %v\n", xy)
+		// fmt.Printf("xy: %v\n", xy)
 		_, err := fmt.Sscanf(xy[0], "X=%d", &xint)
 		if err != nil {
 			panic(err)
@@ -146,7 +164,7 @@ func p1(ctx context.Context) {
 	txt := input.NewTXTFile("13.txt")
 	var cws []*Claw
 	txt.ReadByBlock(ctx, "\n\n", func(block []string) error {
-		fmt.Printf("block: %v\n", len(block))
+		// fmt.Printf("block: %v\n", len(block))
 		for _, s := range block {
 			cw := Claw{
 				cache: make(map[try]struct{}),
@@ -169,7 +187,35 @@ func p1(ctx context.Context) {
 	fmt.Printf("p1: %d\n", total)
 }
 
+func p2(ctx context.Context) {
+	txt := input.NewTXTFile("13.txt")
+	var cws []*Claw
+	txt.ReadByBlock(ctx, "\n\n", func(block []string) error {
+		// fmt.Printf("block: %v\n", len(block))
+		for _, s := range block {
+			cw := Claw{
+				cache: make(map[try]struct{}),
+			}
+			parts := strings.Split(s, "\n")
+			for _, s := range parts {
+				parseToClaw(&cw, s)
+			}
+			cws = append(cws, &cw)
+		}
+		return nil
+	})
+
+	// fmt.Printf("claw: %v\n", cws)
+
+	var total int
+	for _, cw := range cws {
+		total += cw.Guess2(ctx)
+	}
+	fmt.Printf("p2: %d\n", total)
+}
+
 func main() {
 	ctx := context.Background()
 	p1(ctx)
+	p2(ctx)
 }
