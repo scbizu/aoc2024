@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"fmt"
-	stdmath "math"
 	"strings"
 
 	"github.com/magejiCoder/magejiAoc/grid"
@@ -190,29 +189,14 @@ func findTheTree(robots []robot) bool {
 		xs = append(xs, r.loc.X)
 		xy = append(xy, r.loc.Y)
 	}
-	stdx := stddev(xs)
-	stdy := stddev(xy)
+	stdx := math.StdDev(xs)
+	stdy := math.StdDev(xy)
 	// 19 是个 magic number，是根据实际情况调整出来的
 	// 实际可以先从最差的情况(max(x, y))开始调整，然后逐渐减小
 	if stdx < 19 && stdy < 19 {
 		return true
 	}
 	return false
-}
-
-// 计算标准差，描述点的离散程度
-func stddev(a []int) float64 {
-	mean := 0.0
-	for _, v := range a {
-		mean += float64(v)
-	}
-	mean /= float64(len(a))
-	variance := 0.0
-	for _, v := range a {
-		diff := float64(v) - mean
-		variance += diff * diff
-	}
-	return stdmath.Sqrt(variance / float64(len(a)))
 }
 
 func main() {
