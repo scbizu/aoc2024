@@ -8,6 +8,7 @@ import (
 
 	"github.com/magejiCoder/magejiAoc/grid"
 	"github.com/magejiCoder/magejiAoc/input"
+	"github.com/magejiCoder/magejiAoc/set"
 )
 
 type Direction int
@@ -49,7 +50,7 @@ func parseToD(s string) Direction {
 
 type maze struct {
 	m     grid.VecMatrix[byte]
-	peers []peer
+	peers *set.Set[peer]
 	robot grid.Vec
 }
 
@@ -106,16 +107,10 @@ func (m maze) extend() grid.VecMatrix[byte] {
 }
 
 type state struct {
-	kind string
-	at   grid.Vec
-	d    Direction
-}
-
-type applyFunc func()
-
-func emptyApplyFunc() applyFunc {
-	return func() {
-	}
+	kind  string
+	at    grid.Vec
+	d     Direction
+	peers *set.Set[peer]
 }
 
 func (m *maze) move2(ctx context.Context, s state) (grid.Vec, bool) {
@@ -124,6 +119,7 @@ func (m *maze) move2(ctx context.Context, s state) (grid.Vec, bool) {
 		dst := s.at.Add(s.d.vec())
 		c, ok := m.m.Get(dst)
 		if !ok || c == '#' {
+			m.robot = s.at
 			return s.at, false
 		}
 		if c == '.' {
@@ -133,6 +129,8 @@ func (m *maze) move2(ctx context.Context, s state) (grid.Vec, bool) {
 		if c == '[' || c == ']' {
 			_, ok := m.move2(ctx, state{kind: "box", at: dst, d: s.d})
 			if !ok {
+				m.robot = s.at
+				m.peers = s.peers
 				return s.at, false
 			}
 			m.robot = dst
@@ -161,7 +159,8 @@ func (m *maze) move2(ctx context.Context, s state) (grid.Vec, bool) {
 			// []
 			// ..
 			if c1 == '.' && c2 == '.' {
-				m.peers = append(m.peers, peer{l: pr[0], r: pr[1]})
+				m.peers.Remove(peer{l: pr[0], r: pr[1]})
+				m.peers.Add(peer{l: dst1, r: dst2})
 				return dst1, true
 			}
 			// case 2:
@@ -170,7 +169,8 @@ func (m *maze) move2(ctx context.Context, s state) (grid.Vec, bool) {
 			if c1 == '[' && c2 == ']' {
 				_, ok := m.move2(ctx, state{kind: "box", at: dst1, d: s.d})
 				if ok {
-					m.peers = append(m.peers, peer{l: pr[0], r: pr[1]})
+					m.peers.Remove(peer{l: pr[0], r: pr[1]})
+					m.peers.Add(peer{l: dst1, r: dst2})
 					return dst1, true
 				} else {
 					return s.at, false
@@ -182,7 +182,8 @@ func (m *maze) move2(ctx context.Context, s state) (grid.Vec, bool) {
 			if c1 == '.' && c2 == '[' {
 				_, ok := m.move2(ctx, state{kind: "box", at: dst2, d: s.d})
 				if ok {
-					m.peers = append(m.peers, peer{l: pr[0], r: pr[1]})
+					m.peers.Remove(peer{l: pr[0], r: pr[1]})
+					m.peers.Add(peer{l: dst1, r: dst2})
 					return dst1, true
 				} else {
 					return s.at, false
@@ -191,15 +192,18 @@ func (m *maze) move2(ctx context.Context, s state) (grid.Vec, bool) {
 			if c1 == ']' && c2 == '.' {
 				_, ok := m.move2(ctx, state{kind: "box", at: dst1, d: s.d})
 				if ok {
-					m.peers = append(m.peers, peer{l: pr[0], r: pr[1]})
+					m.peers.Remove(peer{l: pr[0], r: pr[1]})
+					m.peers.Add(peer{l: dst1, r: dst2})
 					return dst1, true
 				} else {
 					return s.at, false
 				}
 			}
 			// case 4:
-			// []
-			//[][]
+			// []     []     []
+			//[][]   [][]   [][]
+			//....   #...  [][][]
+			//              #
 			if c1 == ']' && c2 == '[' {
 				_, ok1 := m.move2(ctx, state{kind: "box", at: dst1, d: s.d})
 				if !ok1 {
@@ -209,7 +213,8 @@ func (m *maze) move2(ctx context.Context, s state) (grid.Vec, bool) {
 				if !ok2 {
 					return s.at, false
 				}
-				m.peers = append(m.peers, peer{l: pr[0], r: pr[1]})
+				m.peers.Remove(peer{l: pr[0], r: pr[1]})
+				m.peers.Add(peer{l: dst1, r: dst2})
 				return dst1, true
 			}
 		case left, right:
@@ -220,21 +225,20 @@ func (m *maze) move2(ctx context.Context, s state) (grid.Vec, bool) {
 				return s.at, false
 			}
 			if s.d == left && c1 == '.' {
-				m.m.Add(at, '.')
-				m.m.Add(dst1, '[')
-				m.m.Add(dst2, ']')
+				m.peers.Remove(peer{l: pr[0], r: pr[1]})
+				m.peers.Add(peer{l: dst1, r: dst2})
 				return dst1, true
 			}
 			if s.d == right && c2 == '.' {
-				m.m.Add(at, '.')
-				m.m.Add(dst1, '[')
-				m.m.Add(dst2, ']')
+				m.peers.Remove(peer{l: pr[0], r: pr[1]})
+				m.peers.Add(peer{l: dst1, r: dst2})
 				return dst1, true
 			}
 			if s.d == left && c1 == ']' {
 				_, ok := m.move2(ctx, state{kind: "box", at: dst1, d: s.d})
 				if ok {
-					m.peers = append(m.peers, peer{l: pr[0], r: pr[1]})
+					m.peers.Remove(peer{l: pr[0], r: pr[1]})
+					m.peers.Add(peer{l: dst1, r: dst2})
 					return dst1, true
 				} else {
 					return s.at, false
@@ -243,7 +247,8 @@ func (m *maze) move2(ctx context.Context, s state) (grid.Vec, bool) {
 			if s.d == right && c2 == '[' {
 				_, ok := m.move2(ctx, state{kind: "box", at: dst2, d: s.d})
 				if ok {
-					m.peers = append(m.peers, peer{l: pr[0], r: pr[1]})
+					m.peers.Remove(peer{l: pr[0], r: pr[1]})
+					m.peers.Add(peer{l: dst1, r: dst2})
 					return dst1, true
 				} else {
 					return s.at, false
@@ -354,7 +359,8 @@ func p1(ctx context.Context) {
 func p2(ctx context.Context) {
 	txt := input.NewTXTFile("15.txt")
 	mz := maze{
-		m: grid.VecMatrix[byte]{},
+		m:     grid.VecMatrix[byte]{},
+		peers: set.New[peer](),
 	}
 	var mvs []Direction
 	var at grid.Vec
@@ -386,15 +392,26 @@ func p2(ctx context.Context) {
 	mz.m.ForEach(func(v grid.Vec, b byte) {
 		if b == '@' {
 			at = v
+			mz.robot = at
+		}
+		if b == '[' {
+			mz.peers.Add(peer{l: v, r: v.Add(grid.Vec{X: 1, Y: 0})})
 		}
 	})
 
-	for idx, mv := range mvs {
+	// fmt.Printf("peers: %v\n", mz.peers)
+	// fmt.Printf("@: %v\n", mz.robot)
+
+	for _, mv := range mvs {
+		// move
 		at, _ = mz.move2(ctx, state{
-			kind: "robot",
-			at:   at,
-			d:    mv,
+			kind:  "robot",
+			at:    at,
+			d:     mv,
+			peers: mz.peers.Copy(),
 		})
+		// fmt.Printf("peers: %v\n", mz.peers)
+		// fmt.Printf("@: %v\n", mz.robot)
 		// reset
 		mz.m.ForEach(func(v grid.Vec, b byte) {
 			if b == '@' {
@@ -404,15 +421,18 @@ func p2(ctx context.Context) {
 				mz.m.Add(v, '.')
 			}
 		})
-		for _, pr := range mz.peers {
+		// load peers to maze
+		for _, pr := range mz.peers.List() {
 			mz.m.Add(pr.l, '[')
 			mz.m.Add(pr.r, ']')
 		}
 		mz.m.Add(mz.robot, '@')
-		fmt.Printf("move: %d,d: %v\n", idx, mv)
-		mz.m.Print(os.Stdout, "%c")
-		fmt.Println()
+		// fmt.Printf("move: %d,d: %v\n", idx, mv)
+		// mz.m.Print(os.Stdout, "%c")
+		// fmt.Println()
 	}
+	// mz.m.Print(os.Stdout, "%c")
+	// fmt.Println()
 	var total int
 	mz.m.ForEach(func(v grid.Vec, b byte) {
 		if b == '[' {
@@ -425,6 +445,6 @@ func p2(ctx context.Context) {
 
 func main() {
 	ctx := context.Background()
-	// p1(ctx)
+	p1(ctx)
 	p2(ctx)
 }
