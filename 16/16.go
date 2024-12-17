@@ -31,41 +31,45 @@ type dv struct {
 }
 
 type state struct {
-	loc  grid.Vec
-	path *set.Set[dv]
-	d    direction
+	loc   grid.Vec
+	path  *set.Set[dv]
+	d     direction
+	score int
 }
 
-func score(d direction, p *set.Set[dv]) int {
-	var score int
-	p.Each(func(item dv) bool {
-		// 转向
-		if d%2 != item.d%2 {
-			score += 1000
-			d = item.d
-		} else {
-			score++
-		}
-		return true
-	})
-	return score
+func copyMaze(m grid.VecMatrix[byte]) grid.VecMatrix[byte] {
+	n := grid.NewVecMatrix[byte]()
+	for k, v := range m {
+		n.Add(k, v)
+	}
+	return n
 }
 
-func (m maze) walk(_ context.Context) int {
+func (m maze) walk(_ context.Context, min int) (int, *set.Set[grid.Vec]) {
+	visited := make(map[dv]int)
 	q := queue.NewQueue[state]()
 	q.Push(state{
 		loc:  m.start,
 		path: set.New[dv](),
 		d:    east,
 	})
-	min := math.MaxInt32
+	fp := set.New[grid.Vec]()
+	if min == 0 {
+		min = math.MaxInt32
+	}
 	for q.Len() > 0 {
 		n := q.Pop()
+		// fmt.Printf("loc: %v,d: %v,visited: %v\n", n.loc, n.d, n.visited)
 		if n.loc == m.end {
-			fmt.Printf("path: %v\n", n.path)
-			if score(east, n.path) < min {
-				min = score(east, n.path)
+			if n.score <= min {
+				// fmt.Printf("score: %d\n", n.score)
+				n.path.Each(func(item dv) bool {
+					fp.Add(item.v)
+					return true
+				})
+				min = n.score
 			}
+			continue
 		}
 		c, ok := m.m.Get(n.loc)
 		if !ok {
@@ -74,97 +78,144 @@ func (m maze) walk(_ context.Context) int {
 		if c == '#' {
 			continue
 		}
-		p := n.path.Copy()
 		// go north
 		{
 			next := n.loc.Add(grid.Vec{X: 0, Y: -1})
-			if n.path.Has(dv{
-				v: next,
-				d: north,
-			}) {
-				continue
-			}
 			nc, ok := m.m.Get(next)
 			if ok && (nc == '.' || nc == 'E') {
-				p.Add(dv{
-					v: next,
+				isTurn := n.d == east || n.d == west
+				score := n.score
+				if isTurn {
+					score += 1001
+				} else {
+					score++
+				}
+				if v, ok := visited[dv{
+					v: n.loc,
 					d: north,
-				})
-				q.Push(state{
-					loc:  next,
-					path: p,
-					d:    north,
-				})
+				}]; (ok && v >= score) || !ok {
+					p := n.path.Copy()
+					p.Add(dv{
+						v: n.loc,
+						d: north,
+					})
+					visited[dv{
+						v: n.loc,
+						d: north,
+					}] = score
+					q.Push(state{
+						loc:   next,
+						path:  p,
+						d:     north,
+						score: score,
+					})
+				}
 			}
 		}
 		// go east
 		{
 			next := n.loc.Add(grid.Vec{X: 1, Y: 0})
-			if n.path.Has(dv{
-				v: next,
-				d: east,
-			}) {
-				continue
-			}
 			nc, ok := m.m.Get(next)
 			if ok && (nc == '.' || nc == 'E') {
-				p.Add(dv{
-					v: next,
+				isTurn := n.d == north || n.d == south
+				score := n.score
+				if isTurn {
+					score += 1001
+				} else {
+					score++
+				}
+				if v, ok := visited[dv{
+					v: n.loc,
 					d: east,
-				})
-				q.Push(state{
-					loc:  next,
-					path: p,
-					d:    east,
-				})
+				}]; (ok && v >= score) || !ok {
+					p := n.path.Copy()
+					p.Add(dv{
+						v: n.loc,
+						d: east,
+					})
+					q.Push(state{
+						loc:   next,
+						path:  p,
+						d:     east,
+						score: score,
+					})
+					visited[dv{
+						v: n.loc,
+						d: east,
+					}] = score
+				}
 			}
 		}
 		// go south
 		{
 			next := n.loc.Add(grid.Vec{X: 0, Y: 1})
-			if n.path.Has(dv{
-				v: next,
-				d: south,
-			}) {
-				continue
-			}
 			nc, ok := m.m.Get(next)
 			if ok && (nc == '.' || nc == 'E') {
-				p.Add(dv{
-					v: next,
+				isTurn := n.d == west || n.d == east
+				score := n.score
+				if isTurn {
+					score += 1001
+				} else {
+					score++
+				}
+				if v, ok := visited[dv{
+					v: n.loc,
 					d: south,
-				})
-				q.Push(state{
-					loc:  next,
-					path: p,
-					d:    south,
-				})
+				}]; (ok && v >= score) || !ok {
+					p := n.path.Copy()
+					p.Add(dv{
+						v: n.loc,
+						d: south,
+					})
+					q.Push(state{
+						loc:   next,
+						path:  p,
+						d:     south,
+						score: score,
+					})
+					visited[dv{
+						v: n.loc,
+						d: south,
+					}] = score
+				}
 			}
 		}
 		// go west
 		{
 			next := n.loc.Add(grid.Vec{X: -1, Y: 0})
-			if n.path.Has(dv{
-				v: next,
-				d: west,
-			}) {
-				continue
-			}
 			nc, ok := m.m.Get(next)
 			if ok && (nc == '.' || nc == 'E') {
-				p.Add(dv{
-					v: next,
+				isTurn := n.d == north || n.d == south
+				score := n.score
+				if isTurn {
+					score += 1001
+				} else {
+					score++
+				}
+				if v, ok := visited[dv{
+					v: n.loc,
 					d: west,
-				})
-				q.Push(state{
-					loc:  next,
-					path: p,
-					d:    west,
-				})
+				}]; (ok && v >= score) || !ok {
+					p := n.path.Copy()
+					p.Add(dv{
+						v: n.loc,
+						d: west,
+					})
+					q.Push(state{
+						loc:   next,
+						path:  p,
+						d:     west,
+						score: score,
+					})
+					visited[dv{
+						v: n.loc,
+						d: west,
+					}] = score
+				}
 			}
 		}
 	}
-	return min
+	return min, fp
 }
 
 func p1(ctx context.Context) {
@@ -184,11 +235,39 @@ func p1(ctx context.Context) {
 		}
 		return nil
 	})
-	min := m.walk(ctx)
+	min, _ := m.walk(ctx, 0)
 	fmt.Printf("p1: %d\n", min)
+}
+
+func p2(ctx context.Context) {
+	txt := input.NewTXTFile("16.txt")
+	m := maze{
+		m: grid.NewVecMatrix[byte](),
+	}
+	txt.ReadByLineEx(ctx, func(i int, line string) error {
+		for j, c := range line {
+			if c == 'S' {
+				m.start = grid.Vec{X: j, Y: i}
+			}
+			if c == 'E' {
+				m.end = grid.Vec{X: j, Y: i}
+			}
+			m.m.Add(grid.Vec{X: j, Y: i}, byte(c))
+		}
+		return nil
+	})
+	min, _ := m.walk(ctx, 0)
+	_, fp := m.walk(ctx, min)
+	// fp.Each(func(item grid.Vec) bool {
+	// 	m.m.Add(item, 'O')
+	// 	return true
+	// })
+	// m.m.Print(os.Stdout, "%c")
+	fmt.Printf("p2: %d\n", fp.Size()+1)
 }
 
 func main() {
 	ctx := context.Background()
 	p1(ctx)
+	p2(ctx)
 }
