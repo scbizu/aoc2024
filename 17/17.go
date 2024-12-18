@@ -4,11 +4,13 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"slices"
 	"strconv"
 	"strings"
 
 	"github.com/magejiCoder/magejiAoc/input"
 	"github.com/magejiCoder/magejiAoc/math"
+	"github.com/magejiCoder/magejiAoc/queue"
 )
 
 type computer struct {
@@ -35,6 +37,69 @@ func (c *computer) combo(v int) int {
 	}
 	// 7 is reserved
 	panic("invalid combo")
+}
+
+type state struct {
+	rIndex int
+	ra     int
+}
+
+// 因为 RC 的存在使得 RB/RC 的过程不可推导
+// RB 取反之后再让 RA 右移赋值给RC 真的不知道想要干嘛，所以只能用逆向工程来硬解
+// 先找到最后一个program代表的RA,再往前推，因为每次RA结果之后都会 / 8 (题目中的 0 3 序列)，所以找到第一个之后就开始左移3位找到下一个RA
+func (c *computer) guess() int {
+	// reverse the program
+	pmc := slices.Clone(c.program)
+	slices.Reverse(pmc)
+	raq := queue.NewQueue[state]()
+	raq.Push(state{
+		rIndex: 0,
+		ra:     0,
+	})
+	var results []int
+	for raq.Len() > 0 {
+		s := raq.Pop()
+		if s.rIndex == len(pmc) {
+			break
+		}
+		for i := 0 + s.ra; i < 8+s.ra; i++ {
+			cm := &computer{
+				rb:      c.rb,
+				rc:      c.rc,
+				program: c.program,
+			}
+			cm.ra = i
+			buf := bytes.NewBuffer(nil)
+			cm.load(buf)
+			r := slices.Clone(pmc[:s.rIndex+1])
+			slices.Reverse(r)
+			// fmt.Printf("buf: %s\n", buf.String())
+			// fmt.Printf("ra: %v\n", i)
+			if buf.String() == joinInts(r) {
+				if len(r) == len(c.program) {
+					results = append(results, i)
+					continue
+				}
+				a := i << 3
+				// fmt.Printf("[%d]ra: %d, p: %d\n", s.rIndex, s.ra, i)
+				raq.Push(state{
+					rIndex: s.rIndex + 1,
+					ra:     a,
+				})
+			}
+		}
+	}
+	slices.Sort(results)
+	// panic("no solution found")
+	return results[0]
+}
+
+func joinInts(ints []int) string {
+	var ss []string
+	for _, i := range ints {
+		ss = append(ss, strconv.Itoa(i))
+	}
+	return strings.Join(ss, ",")
 }
 
 func (c *computer) load(buf *bytes.Buffer) {
@@ -118,6 +183,32 @@ func (c *computer) cdv(v2 int) {
 	c.rc = c.ra / v2
 }
 
+func p2(ctx context.Context) {
+	txt := input.NewTXTFile("17.txt")
+	c := &computer{}
+	txt.ReadByBlock(ctx, "\n\n", func(block []string) error {
+		registers := block[0]
+		parts := strings.Split(registers, "\n")
+		ras := strings.TrimPrefix(parts[0], "Register A: ")
+		ra := input.Atoi(ras)
+		bas := strings.TrimPrefix(parts[1], "Register B: ")
+		rb := input.Atoi(bas)
+		cas := strings.TrimPrefix(parts[2], "Register C: ")
+		rc := input.Atoi(cas)
+		c.ra = ra
+		c.rb = rb
+		c.rc = rc
+		program := block[1]
+		programs := strings.TrimPrefix(program, "Program: ")
+		pparts := strings.Split(programs, ",")
+		for _, p := range pparts {
+			c.program = append(c.program, input.Atoi(p))
+		}
+		return nil
+	})
+	fmt.Printf("p2: %d\n", c.guess())
+}
+
 func p1(ctx context.Context) {
 	txt := input.NewTXTFile("17.txt")
 	c := &computer{}
@@ -149,4 +240,5 @@ func p1(ctx context.Context) {
 func main() {
 	ctx := context.Background()
 	p1(ctx)
+	p2(ctx)
 }
