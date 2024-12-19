@@ -17,6 +17,9 @@ type memorySpace struct {
 	start         grid.Vec
 	end           grid.Vec
 	width, height int
+
+	validIndex   int
+	invalidIndex int
 }
 
 type byteCord struct {
@@ -57,6 +60,48 @@ const (
 type dirVec struct {
 	v grid.Vec
 	d direction
+}
+
+func cloneSpace(space *memorySpace) *memorySpace {
+	nm := grid.NewVecMatrix[byte]()
+	for k, v := range space.m {
+		nm[k] = v
+	}
+	return &memorySpace{
+		m:            nm,
+		start:        space.start,
+		end:          space.end,
+		width:        space.width,
+		height:       space.height,
+		validIndex:   space.validIndex,
+		invalidIndex: space.invalidIndex,
+	}
+}
+
+func (m *memorySpace) binaryDrop(ctx context.Context, dropped []byteCord, startIndex, endIndex int) int {
+	m.validIndex = startIndex
+	m.invalidIndex = endIndex
+	for {
+		// fmt.Printf("on [%d:%d]\n", startIndex, endIndex)
+		// fmt.Printf("validIndex: %d, invalidIndex: %d\n", m.validIndex, m.invalidIndex)
+		if m.invalidIndex == m.validIndex+2 {
+			break
+		}
+		s := cloneSpace(m)
+		bs := dropped[startIndex:endIndex]
+		s.dropBytes(bs)
+		if s.escape(ctx) > 0 {
+			// fmt.Println("OK")
+			m.validIndex = endIndex
+			endIndex = endIndex + (m.invalidIndex-endIndex)/2 + 1
+		}
+		if s.escape(ctx) == -1 {
+			// fmt.Println("NG")
+			m.invalidIndex = endIndex
+			endIndex = (m.validIndex+endIndex)/2 + 1
+		}
+	}
+	return m.validIndex
 }
 
 func (m *memorySpace) escape(_ context.Context) int {
@@ -133,6 +178,9 @@ func (m *memorySpace) escape(_ context.Context) int {
 		}
 
 	}
+	if len(totals) == 0 {
+		return -1
+	}
 	slices.Sort(totals)
 	return totals[0]
 }
@@ -140,6 +188,39 @@ func (m *memorySpace) escape(_ context.Context) int {
 func main() {
 	ctx := context.Background()
 	p1(ctx)
+	p2(ctx)
+}
+
+func p2(ctx context.Context) {
+	txt := input.NewTXTFile("18.txt")
+	var bs []byteCord
+	txt.ReadByLineEx(ctx, func(_ int, line string) error {
+		bc := parseByteCord(line)
+		bs = append(bs, bc)
+		return nil
+	})
+	width, height := 71, 71
+	ms := &memorySpace{
+		m: grid.NewVecMatrix[byte](),
+		start: grid.Vec{
+			X: 0,
+			Y: 0,
+		},
+		end: grid.Vec{
+			X: width - 1,
+			Y: height - 1,
+		},
+	}
+	for y := 0; y < height; y++ {
+		for x := 0; x < width; x++ {
+			ms.m.Add(grid.Vec{
+				X: x,
+				Y: y,
+			}, '.')
+		}
+	}
+	index := ms.binaryDrop(ctx, bs, 0, len(bs))
+	fmt.Printf("p2: %s\n", fmt.Sprintf("%d,%d", bs[index].v.X, bs[index].v.Y))
 }
 
 func p1(ctx context.Context) {
@@ -171,6 +252,7 @@ func p1(ctx context.Context) {
 		}
 	}
 	dropped := 1024
+	// fmt.Printf("dropped byte: %v\n", bs[dropped])
 	// fmt.Printf("dropped: %d\n", bs[:dropped])
 	ms.dropBytes(bs[:dropped])
 	fmt.Printf("p1: %d\n", ms.escape(ctx))
