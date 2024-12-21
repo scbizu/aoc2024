@@ -3,11 +3,10 @@ package main
 import (
 	"context"
 	"fmt"
-	"slices"
 
 	"github.com/magejiCoder/magejiAoc/grid"
 	"github.com/magejiCoder/magejiAoc/input"
-	"github.com/magejiCoder/magejiAoc/queue"
+	"github.com/magejiCoder/magejiAoc/math"
 )
 
 type raceTrack struct {
@@ -17,83 +16,28 @@ type raceTrack struct {
 	cache      map[grid.Vec]int
 }
 
-type pair struct {
-	min int
-	max int
-}
-
-type gridPath struct {
-	v    grid.Vec
-	path int
+func manhattan(v1, v2 grid.Vec) int {
+	return math.Abs(v1.X-v2.X) + math.Abs(v1.Y-v2.Y)
 }
 
 func (r *raceTrack) wallBreak(_ context.Context, atMost int, leastPath int) int {
-	// for every wall. we can find the break path until it reaches the path or atMost
-	prs := make(map[pair]int)
-	r.m.ForEach(func(v grid.Vec, b byte) {
-		if b != '#' {
-			return
-		}
-		var nums []gridPath
-		visited := make(map[grid.Vec]struct{})
-		q := queue.NewQueue[gridPath]()
-		q.Push(gridPath{
-			v:    v,
-			path: 1,
-		})
-		for q.Len() > 0 {
-			cur := q.Pop()
-			if _, ok := visited[cur.v]; ok {
-				continue
-			}
-			visited[cur.v] = struct{}{}
-			if len(visited) > atMost {
-				break
-			}
-			for _, n := range r.m.GetNeighbor(cur.v) {
-				_, ok := r.cache[n]
-				// find the entrance out
-				if ok {
-					nums = append(nums, gridPath{
-						v:    n,
-						path: cur.path,
-					})
-					continue
-				}
-				nc, ok := r.m.Get(n)
-				if ok && nc == '#' {
-					q.Push(gridPath{
-						v:    n,
-						path: cur.path + 1,
-					})
-				}
-			}
-		}
-	})
-	return total
-}
-
-func (r *raceTrack) leastPath(_ context.Context, least int) int {
 	var total int
-	// find wall
-	r.m.ForEach(func(v grid.Vec, b byte) {
-		if b != '#' {
-			return
-		}
-		var nums []int
-		for _, n := range r.m.GetNeighbor(v) {
-			if c, ok := r.cache[n]; ok {
-				nums = append(nums, c)
+	// for every vec in cache, we should search max to `atMost` area to find if we can use our cheat time
+	for vec, d := range r.cache {
+		for j := vec.X - atMost; j <= vec.X+atMost; j++ {
+			for k := vec.Y - atMost; k <= vec.Y+atMost; k++ {
+				if p, ok := r.cache[grid.Vec{X: j, Y: k}]; ok {
+					// 「Cheats don't need to use all 20 picoseconds」
+					if manhattan(vec, grid.Vec{X: j, Y: k}) > atMost {
+						continue
+					}
+					if p-d-manhattan(vec, grid.Vec{X: j, Y: k}) >= leastPath {
+						total++
+					}
+				}
 			}
 		}
-		if len(nums) > 1 {
-			slices.Sort(nums)
-			if nums[len(nums)-1]-nums[0]-2 >= least {
-				// fmt.Printf("v: %v, nums: %v,saves: %d\n", v, nums, nums[len(nums)-1]-nums[0]-2)
-				total++
-			}
-		}
-	})
+	}
 	return total
 }
 
@@ -161,7 +105,7 @@ func p1(ctx context.Context) {
 	rs.walk(ctx)
 	// fmt.Printf("cache: %d\n", len(rs.cache))
 	least := 100
-	delta := rs.leastPath(ctx, least)
+	delta := rs.wallBreak(ctx, 2, least)
 	fmt.Printf("p1: %d\n", delta)
 }
 
@@ -194,8 +138,8 @@ func p2(ctx context.Context) {
 	})
 	rs.cache[rs.start] = 0
 	rs.walk(ctx)
-	fmt.Printf("cache: %d\n", len(rs.cache))
-	least := 76
+	// fmt.Printf("cache: %v\n", rs.cache)
+	least := 100
 	maxBreak := 20
 	delta := rs.wallBreak(ctx, maxBreak, least)
 	fmt.Printf("p2: %d\n", delta)
