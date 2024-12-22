@@ -6,6 +6,8 @@ import (
 	"fmt"
 
 	"github.com/magejiCoder/magejiAoc/input"
+	"github.com/magejiCoder/magejiAoc/queue"
+	"github.com/magejiCoder/magejiAoc/set"
 )
 
 // ctrl1 is the digital controller .
@@ -36,76 +38,72 @@ func (d direction) String() string {
 	return "unknown"
 }
 
-func (c *ctrl1) apply(b byte) []direction {
-	fmt.Printf("current: %c, target: %c\n", c.current, b)
-	var ret []direction
-	if c.current == b {
-		return ret
+type pathTrack []string
+
+type state struct {
+	current byte
+	path    []direction
+	visited *set.Set[byte]
+}
+
+func dirsToString(dirs []direction) string {
+	var ret string
+	for _, d := range dirs {
+		ret += d.String()
 	}
-	switch c.current {
-	case 'A':
-		if b < '3' {
-			ret = append(ret, left)
-			c.current = '0'
-			ret = append(ret, c.apply(b)...)
-		} else {
-			ret = append(ret, up)
-			c.current = '3'
-			ret = append(ret, c.apply(b)...)
+	ret += "A"
+	return ret
+}
+
+type numDir struct {
+	num byte
+	dir direction
+}
+
+var numPad = map[byte][]numDir{
+	'A': {{num: '0', dir: left}, {num: '3', dir: up}},
+	'0': {{num: 'A', dir: right}, {num: '2', dir: up}},
+	'1': {{num: '2', dir: right}, {num: '4', dir: up}},
+	'2': {{num: '1', dir: left}, {num: '5', dir: up}, {num: '0', dir: down}},
+	'3': {{num: 'A', dir: down}, {num: '6', dir: up}, {num: '1', dir: left}},
+	'4': {{num: '1', dir: down}, {num: '7', dir: up}, {num: '5', dir: right}},
+	'5': {{num: '2', dir: down}, {num: '8', dir: up}, {num: '4', dir: left}, {num: '6', dir: right}},
+	'6': {{num: '3', dir: down}, {num: '9', dir: up}, {num: '5', dir: left}},
+	'7': {{num: '4', dir: down}, {num: '8', dir: right}},
+	'8': {{num: '5', dir: down}, {num: '9', dir: right}, {num: '7', dir: left}},
+	'9': {{num: '6', dir: down}, {num: '8', dir: left}},
+}
+
+var dirPad = map[byte][]numDir{
+	'^': {{num: 'v', dir: down}, {num: 'A', dir: right}},
+	'v': {{num: '^', dir: up}, {num: '<', dir: left}, {num: '>', dir: right}},
+	'<': {{num: 'v', dir: right}},
+	'>': {{num: 'v', dir: left}, {num: 'A', dir: up}},
+	'A': {{num: '^', dir: left}, {num: '>', dir: down}},
+}
+
+func (c *ctrl1) apply(b byte) pathTrack {
+	// fmt.Printf("current: %c, target: %c\n", c.current, b)
+
+	q := queue.NewQueue[state]()
+	q.Push(state{current: c.current, path: []direction{}, visited: set.New(c.current)})
+	var ret pathTrack
+
+	for q.Len() > 0 {
+		p := q.Pop()
+		if p.current == b {
+			ret = append(ret, dirsToString(p.path))
 		}
-	case '0':
-		if b == 'A' {
-			ret = append(ret, right)
-		} else {
-			ret = append(ret, up)
-			c.current = '2'
-			ret = append(ret, c.apply(b)...)
-		}
-	default:
-		if b == 'A' {
-			ret = append(ret, c.apply('3')...)
-			ret = append(ret, down)
-			return ret
-		}
-		if c.current > b {
-			sub := c.current - b
-			switch sub {
-			case 2:
-				if c.current-'0' != 0 {
-					ret = append(ret, c.apply(c.current-3)...)
-					ret = append(ret, right)
-				} else {
-					ret = append(ret, c.apply(c.current-1)...)
-				}
-			case 1:
-				ret = append(ret, left)
-			case 3:
-				ret = append(ret, down)
-			default:
-				ret = append(ret, c.apply(c.current-3)...)
-				ret = append(ret, c.apply(b)...)
+		dirs := p.path
+		for _, next := range numPad[p.current] {
+			if p.visited.Has(next.num) {
+				continue
 			}
-		} else {
-			sub := b - c.current
-			switch sub {
-			case 2:
-				if c.current-'0' != 0 {
-					ret = append(ret, c.apply(c.current+3)...)
-					ret = append(ret, left)
-				} else {
-					ret = append(ret, c.apply(c.current+1)...)
-				}
-			case 1:
-				ret = append(ret, right)
-			case 3:
-				ret = append(ret, up)
-			default:
-				ret = append(ret, c.apply(c.current+3)...)
-				ret = append(ret, c.apply(b)...)
-			}
+			pc := p.visited.Copy()
+			pc.Add(next.num)
+			q.Push(state{current: next.num, path: append(dirs, next.dir), visited: pc})
 		}
 	}
-	c.current = b
 	return ret
 }
 
@@ -114,76 +112,23 @@ type ctrl2 struct {
 	current byte
 }
 
-func (c2 *ctrl2) apply(fb byte) []direction {
-	var ret []direction
-	if c2.current == fb {
-		return ret
-	}
-	switch c2.current {
-	case 'A':
-		switch fb {
-		case '>':
-			ret = append(ret, down)
-			c2.current = '>'
-		case '^':
-			ret = append(ret, left)
-			c2.current = '^'
-		default:
-			ret = append(ret, left)
-			c2.current = '^'
-			ret = append(ret, c2.apply(fb)...)
+func (c2 *ctrl2) apply(fb byte) pathTrack {
+	var ret pathTrack
+	q := queue.NewQueue[state]()
+	q.Push(state{current: c2.current, path: []direction{}, visited: set.New(c2.current)})
+	for q.Len() > 0 {
+		p := q.Pop()
+		if p.current == fb {
+			ret = append(ret, dirsToString(p.path))
 		}
-	case '^':
-		switch fb {
-		case 'A':
-			ret = append(ret, right)
-			c2.current = 'A'
-		case 'v':
-			ret = append(ret, down)
-			c2.current = 'v'
-		default:
-			ret = append(ret, down)
-			c2.current = 'v'
-			ret = append(ret, c2.apply(fb)...)
-		}
-	case 'v':
-		switch fb {
-		case '^':
-			ret = append(ret, up)
-			c2.current = '^'
-		case '<':
-			ret = append(ret, left)
-			c2.current = '<'
-		case '>':
-			ret = append(ret, right)
-			c2.current = '>'
-		default:
-			ret = append(ret, right)
-			c2.current = '>'
-			ret = append(ret, c2.apply(fb)...)
-		}
-	case '>':
-		switch fb {
-		case 'A':
-			ret = append(ret, up)
-			c2.current = 'A'
-		case 'v':
-			ret = append(ret, left)
-			c2.current = 'v'
-		default:
-			ret = append(ret, left)
-			c2.current = 'v'
-			ret = append(ret, c2.apply(fb)...)
-		}
-	case '<':
-		switch fb {
-		case 'v':
-			ret = append(ret, right)
-			c2.current = 'v'
-		default:
-			ret = append(ret, right)
-			c2.current = 'v'
-			ret = append(ret, c2.apply(fb)...)
+		dirs := p.path
+		for _, next := range dirPad[p.current] {
+			if p.visited.Has(next.num) {
+				continue
+			}
+			pc := p.visited.Copy()
+			pc.Add(next.num)
+			q.Push(state{current: next.num, path: append(dirs, next.dir), visited: pc})
 		}
 	}
 	return ret
