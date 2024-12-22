@@ -112,57 +112,91 @@ func (c *ctrl1) apply(b byte) []direction {
 // ctrl2 is the robot controller .
 type ctrl2 struct {
 	current byte
-
-	node *node
-}
-
-func (c *ctrl2) init() {
-	nodeA := &node{v: 'A'}
-	nodeU := &node{v: '^'}
-	nodeD := &node{v: 'v'}
-	nodeL := &node{v: '<'}
-	nodeR := &node{v: '>'}
-	nodeA.neighbors = []*node{nodeU, nodeR}
-	nodeU.neighbors = []*node{nodeA, nodeD}
-	nodeD.neighbors = []*node{nodeU, nodeR, nodeL}
-	nodeL.neighbors = []*node{nodeD}
-	c.node = nodeA
-}
-
-type node struct {
-	v         byte
-	neighbors []*node
 }
 
 func (c2 *ctrl2) apply(fb byte) []direction {
 	var ret []direction
-	switch {
-	case c2.current == 'A' && fb == '>':
-		ret = append(ret, down)
-		c2.current = '>'
-	case c2.current == 'A' && fb == '^':
-		ret = append(ret, up)
-		c2.current = '^'
-	case c2.current == '^' && fb == 'A':
-		ret = append(ret, right)
-		c2.current = 'A'
-	case c2.current == '^' && fb == 'v':
-		ret = append(ret, down)
-		c2.current = 'v'
-	case c2.current == 'v' && fb == '>':
-		ret = append(ret, right)
-		c2.current = '>'
-	case c2.current == 'v' && fb == '<':
-		ret = append(ret, left)
-		c2.current = '<'
-	case c2.current == 'v' && fb == '^':
-		ret = append(ret, up)
-		c2.current = '^'
-	case c2.current == '<' && fb == 'v':
-		ret = append(ret, right)
-		c2.current = 'v'
+	if c2.current == fb {
+		return ret
+	}
+	switch c2.current {
+	case 'A':
+		switch fb {
+		case '>':
+			ret = append(ret, down)
+			c2.current = '>'
+		case '^':
+			ret = append(ret, left)
+			c2.current = '^'
+		default:
+			ret = append(ret, left)
+			c2.current = '^'
+			ret = append(ret, c2.apply(fb)...)
+		}
+	case '^':
+		switch fb {
+		case 'A':
+			ret = append(ret, right)
+			c2.current = 'A'
+		case 'v':
+			ret = append(ret, down)
+			c2.current = 'v'
+		default:
+			ret = append(ret, down)
+			c2.current = 'v'
+			ret = append(ret, c2.apply(fb)...)
+		}
+	case 'v':
+		switch fb {
+		case '^':
+			ret = append(ret, up)
+			c2.current = '^'
+		case '<':
+			ret = append(ret, left)
+			c2.current = '<'
+		case '>':
+			ret = append(ret, right)
+			c2.current = '>'
+		default:
+			ret = append(ret, right)
+			c2.current = '>'
+			ret = append(ret, c2.apply(fb)...)
+		}
+	case '>':
+		switch fb {
+		case 'A':
+			ret = append(ret, up)
+			c2.current = 'A'
+		case 'v':
+			ret = append(ret, left)
+			c2.current = 'v'
+		default:
+			ret = append(ret, left)
+			c2.current = 'v'
+			ret = append(ret, c2.apply(fb)...)
+		}
+	case '<':
+		switch fb {
+		case 'v':
+			ret = append(ret, right)
+			c2.current = 'v'
+		default:
+			ret = append(ret, right)
+			c2.current = 'v'
+			ret = append(ret, c2.apply(fb)...)
+		}
 	}
 	return ret
+}
+
+func toInt(seq string) int {
+	var intPart string
+	for _, b := range []byte(seq) {
+		if '0' <= b && b <= '9' {
+			intPart += string(b)
+		}
+	}
+	return input.Atoi(intPart)
 }
 
 func p1(ctx context.Context) {
@@ -172,7 +206,7 @@ func p1(ctx context.Context) {
 		seqs = append(seqs, line)
 		return nil
 	})
-	buf := bytes.NewBuffer(nil)
+	var outs []string
 	for _, seq := range seqs {
 		c1 := &ctrl1{current: 'A'}
 		bf := bytes.NewBuffer(nil)
@@ -183,9 +217,29 @@ func p1(ctx context.Context) {
 			}
 			bf.WriteString("A")
 		}
-		buf.WriteString(bf.String())
+		fmt.Printf("c1: %s\n", bf.String())
+		in := bf.Bytes()
+		for i := 0; i < 2; i++ {
+			c2 := &ctrl2{current: 'A'}
+			c2b := bytes.NewBuffer(nil)
+			for _, b := range in {
+				dirs := c2.apply(b)
+				for _, d := range dirs {
+					c2b.WriteString(d.String())
+				}
+				c2b.WriteString("A")
+			}
+			in = c2b.Bytes()
+			fmt.Printf("c2(%d): %s\n", i, c2b.String())
+		}
+		outs = append(outs, string(in))
 	}
-	fmt.Println(buf.String())
+	var sum int
+	for i, out := range outs {
+		fmt.Printf("seq: %d, out: %d\n", toInt(seqs[i]), len(out))
+		sum += len(out) * toInt(seqs[i])
+	}
+	fmt.Printf("p1: %d\n", sum)
 }
 
 func main() {
