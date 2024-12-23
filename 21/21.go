@@ -165,42 +165,72 @@ type item struct {
 }
 
 type key struct {
-	from   byte
-	to     byte
-	nRobot int
+	path   string
+	repeat int
 }
 
 // cache for the digital pad mapping
 var cache = map[key]int{}
 
-// buildTogether builds the shortest path length for the robot and the digital pad.
+// build builds the shortest path length for the robot and the digital pad.
 // For every digitalPad x->y path , per to robots numbers , the result is fixed.
 // For Example: (029A)
 // 1. A->0 (Robots: 3 (plus 1 for my pad)): (A -> < , A) (Robots: 2): (A -> <, , < -> A, A) (Robots: 1)
 // 2. 0->2 (Robots: 3) : xxx (Robots: 2) : yyy (Robots: 1)
 // 3. 2->9
-func buildTogether(seq []byte, robots int) int {
-	var length int
+func build(seq []byte, robots int) int {
 	var from byte = 'A'
+	shortest := math.MaxInt32
 	for i := 0; i < len(seq); i++ {
 		to := seq[i]
-		r := robots
-		ds := buildDigitalPad([]byte{to})
-		for r > 0 {
-			if l, ok := cache[key{from: from, to: to, nRobot: r}]; ok {
-				length += l
-				break
+		// A -> 0
+		c := &ctrl1{current: from}
+		paths := c.apply(to)
+		min, next := filterShortest(paths)
+		fmt.Printf("min: %d, next: %v\n", min, next)
+		var dfs func(l int, next pathTrack, robots int) int
+		dfs = func(l int, next pathTrack, robots int) int {
+			if robots == 0 {
+				return l
 			}
-			for _, d := range ds {
-				r2 := buildRobotPad([]byte(d), false)
-				if len(filterShortest(r2)[0]) <= length {
-					length = len(filterShortest(r2)[0])
+			fmt.Printf("l: %d, next: %v, robots: %d\n", l, next, robots)
+			shortest := math.MaxInt32
+			for _, path := range next {
+				var ln int
+				if v, ok := cache[key{path: path, repeat: robots}]; ok {
+					shortest = v
+					continue
 				}
+				var current byte = 'A'
+				var nexts []pathTrack
+				var minSum int
+				for _, c := range path {
+					r := &ctrl2{current: byte(current)}
+					r2 := r.apply(byte(c), false)
+					min, next := filterShortest(r2)
+					// every n in nexts x every n2 in next
+					for _, n2 := range next {
+					}
+					minSum += min
+					current = byte(c)
+				}
+				ln += dfs(minSum, nexts, robots-1)
+				if ln < shortest {
+					shortest = ln
+				}
+				cache[key{path: path, repeat: robots}] = shortest
+
 			}
+			return shortest + l
+		}
+		n := dfs(min, next, robots)
+		if n < shortest {
+			shortest = n
 		}
 		from = to
 	}
-	return length
+	fmt.Printf("shortest: %d\n", shortest)
+	return shortest
 }
 
 func buildDigitalPad(seq []byte) []string {
@@ -284,7 +314,7 @@ func buildRobotPad(seq []byte, last bool) []string {
 	return nret
 }
 
-func filterShortest(ret []string) []string {
+func filterShortest(ret []string) (int, []string) {
 	minLen := len(ret[0])
 	for _, r := range ret {
 		if len(r) < minLen {
@@ -297,7 +327,7 @@ func filterShortest(ret []string) []string {
 			nret = append(nret, r)
 		}
 	}
-	return nret
+	return minLen, nret
 }
 
 func p1(ctx context.Context) {
@@ -322,9 +352,10 @@ func p1(ctx context.Context) {
 				// if i == 1 { fmt.Printf("n: %v\n", n)
 				// }
 				r2 := buildRobotPad([]byte(n), i == 1)
-				if len(filterShortest(r2)[0]) <= shortest {
-					shortest = len(filterShortest(r2)[0])
-					nx = append(nx, filterShortest(r2)...)
+				min, next := filterShortest(r2)
+				if min <= shortest {
+					shortest = min
+					nx = append(nx, next...)
 				}
 			}
 			next = nx
@@ -358,46 +389,15 @@ func p2(ctx context.Context) {
 		seqs = append(seqs, line)
 		return nil
 	})
-	// fmt.Printf("seqs: %v\n", seqs)
 	var sum int
 	for _, seq := range seqs {
-		next := buildDigitalPad([]byte(seq))
-		// fmt.Printf("next: %v\n", next)
-		for i := 0; i < 25; i++ {
-			shortest := math.MaxInt32
-			var nx []string
-			for _, n := range next {
-				// if i == 1 { fmt.Printf("n: %v\n", n)
-				// }
-				r2 := buildRobotPad([]byte(n), i == 24)
-				if len(filterShortest(r2)[0]) <= shortest {
-					shortest = len(filterShortest(r2)[0])
-					nx = append(nx, filterShortest(r2)...)
-				}
-			}
-			next = nx
-			// fmt.Printf("next r: %v\n", next)
-		}
-		minLen := len(next[0])
-		for _, r := range next {
-			if len(r) < minLen {
-				minLen = len(r)
-			}
-		}
-		var nret []string
-		for _, r := range next {
-			if len(r) == minLen {
-				nret = append(nret, r)
-			}
-		}
-		// fmt.Printf("n: %v\n", len(nret[0]))
-		sum += toInt(seq) * len(nret[0])
+		sum += toInt(seq) * build([]byte(seq), 2)
 	}
 	fmt.Printf("p2: %d\n", sum)
 }
 
 func main() {
 	ctx := context.Background()
-	p1(ctx)
-	// p2(ctx)
+	// p1(ctx)
+	p2(ctx)
 }
