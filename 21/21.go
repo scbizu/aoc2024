@@ -164,6 +164,45 @@ type item struct {
 	path  []string
 }
 
+type key struct {
+	from   byte
+	to     byte
+	nRobot int
+}
+
+// cache for the digital pad mapping
+var cache = map[key]int{}
+
+// buildTogether builds the shortest path length for the robot and the digital pad.
+// For every digitalPad x->y path , per to robots numbers , the result is fixed.
+// For Example: (029A)
+// 1. A->0 (Robots: 3 (plus 1 for my pad)): (A -> < , A) (Robots: 2): (A -> <, , < -> A, A) (Robots: 1)
+// 2. 0->2 (Robots: 3) : xxx (Robots: 2) : yyy (Robots: 1)
+// 3. 2->9
+func buildTogether(seq []byte, robots int) int {
+	var length int
+	var from byte = 'A'
+	for i := 0; i < len(seq); i++ {
+		to := seq[i]
+		r := robots
+		ds := buildDigitalPad([]byte{to})
+		for r > 0 {
+			if l, ok := cache[key{from: from, to: to, nRobot: r}]; ok {
+				length += l
+				break
+			}
+			for _, d := range ds {
+				r2 := buildRobotPad([]byte(d), false)
+				if len(filterShortest(r2)[0]) <= length {
+					length = len(filterShortest(r2)[0])
+				}
+			}
+		}
+		from = to
+	}
+	return length
+}
+
 func buildDigitalPad(seq []byte) []string {
 	var ret []string
 	q := queue.NewQueue[item]()
