@@ -40,7 +40,7 @@ func (l lan) findLargestGroup() []string {
 							peers.Add(s[i])
 						}
 					}
-					fmt.Printf("peers: %v\n", peers.List())
+					// fmt.Printf("peers: %v\n", peers.List())
 					if peers.Size() > max {
 						max = peers.Size()
 						ls = peers.List()
