@@ -15,37 +15,41 @@ type lan struct {
 }
 
 func (l lan) findLargestGroup() []string {
-	peers := set.New[string]()
+	var ls []string
 	var max int
 	for c, s := range l.computers {
 		s.Each(func(item string) bool {
 			other := l.computers[item]
 			if other.Has(c) {
 				rest := set.Intersection(s, other)
-				fmt.Printf("c: %s, item: %s, rest: %v\n", c, item, rest)
-				var full bool
-				for i := 0; i < rest.Size(); i++ {
-					for j := i + 1; j < rest.Size(); j++ {
-						if !l.computers[rest.List()[i]].Has(rest.List()[j]) {
-							// TODO: handle join
-							return true
+				// fmt.Printf("c: %s, item: %s, rest: %v\n", c, item, rest)
+				if rest.Size() > 0 {
+					peers := set.New[string]()
+					peers.Add(c, item)
+					s := rest.List()
+					// keep order of origin set
+					slices.Sort(s)
+					// pop 1
+					peers.Add(s[0])
+					buffer := set.New[string]()
+					buffer.Add(s[0])
+					for i := 1; i < len(s); i++ {
+						// check if the next contains all the previous
+						if l.computers[s[i]].Has(buffer.List()...) {
+							buffer.Add(s[i])
+							peers.Add(s[i])
 						}
 					}
-				}
-				if full {
-					if rest.Size() > max {
-						max = rest.Size()
-						peers.Clear()
-						peers.Add(c)
-						peers.Add(item)
-						peers.Add(rest.List()...)
+					fmt.Printf("peers: %v\n", peers.List())
+					if peers.Size() > max {
+						max = peers.Size()
+						ls = peers.List()
 					}
 				}
 			}
 			return true
 		})
 	}
-	ls := peers.List()
 	slices.Sort(ls)
 	return ls
 }
@@ -135,7 +139,7 @@ func p2(ctx context.Context) {
 	})
 	lan := buildLanParty(links)
 	group := lan.findLargestGroup()
-	fmt.Printf("p2: %v\n", group)
+	fmt.Printf("p2: %v\n", strings.Join(group, ","))
 }
 
 func main() {
