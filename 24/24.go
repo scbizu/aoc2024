@@ -7,7 +7,7 @@ import (
 	"strings"
 
 	"github.com/magejiCoder/magejiAoc/input"
-	"github.com/magejiCoder/magejiAoc/seq"
+	"github.com/magejiCoder/magejiAoc/set"
 )
 
 type ins struct {
@@ -48,32 +48,6 @@ func (w wire) buildMap() map[string]ins {
 	return m
 }
 
-type pair struct {
-	o1 string
-	o2 string
-}
-
-type pairs []pair
-
-func (w *wire) getPairs() [][]pair {
-	var ps []pair
-	for i := 0; i < len(w.instructions); i++ {
-		for j := i + 1; j < len(w.instructions); j++ {
-			ps = append(ps, pair{w.instructions[i].out, w.instructions[j].out})
-		}
-	}
-
-	// pick 4 pairs from ps to pairs
-	return seq.Combination(ps, 4)
-}
-
-// swap swaps 2 gates and wires 's output
-func (w *wire) swap(maxCount int) {
-	if w.swaps == nil {
-		w.swaps = make(map[string]string)
-	}
-}
-
 func (w *wire) apply(in ins) int {
 	// fmt.Printf("in: %v\n", in)
 	op1, op2 := in.in[0], in.in[1]
@@ -109,6 +83,16 @@ type wire struct {
 	instructions []ins
 	output       map[string]int
 	swaps        map[string]string
+}
+
+func (w wire) getByOP(op op) []ins {
+	var res []ins
+	for _, i := range w.instructions {
+		if i.op == op {
+			res = append(res, i)
+		}
+	}
+	return res
 }
 
 func (w *wire) run() {
@@ -200,23 +184,21 @@ func p1(ctx context.Context) {
 		inputs:       inputMap,
 		instructions: instructions,
 		output:       make(map[string]int),
+		swaps:        make(map[string]string),
 	}
 	w.run()
-	fmt.Printf("output: %v\n", w.output)
 	var zsize int
 	for s := range w.output {
 		if strings.HasPrefix(s, "z") {
 			zsize++
 		}
 	}
-	fmt.Printf("zsize: %v\n", zsize)
 	zs := make([]int, zsize)
 	for s, v := range w.output {
 		if strings.HasPrefix(s, "z") {
 			zs[toInt(strings.TrimPrefix(s, "z"))] = v
 		}
 	}
-	fmt.Printf("%v\n", zs)
 	fmt.Printf("p1: %d\n", binaryToDecimal(zs, false))
 }
 
@@ -251,19 +233,127 @@ func p2(ctx context.Context) {
 		instructions: instructions,
 		output:       make(map[string]int),
 	}
-	w.run()
-	xs, ys := w.getX(), w.getY()
-	fmt.Printf("xs: %v;ys: %v\n", xs, ys)
-	add := binAnd(xs, ys, true)
-	zs := w.getZ()
-	fmt.Printf("got: %v,exp: %v\n", zs, add)
+	wrongs := w.check()
+	fmt.Printf("p2: %v\n", strings.Join(wrongs, ","))
 }
 
-func binAnd(a, b []int, reverse bool) []int {
-	da := binaryToDecimal(a, reverse)
-	db := binaryToDecimal(b, reverse)
-	fmt.Printf("da: %v,db: %v\n", da, db)
-	return decToBinary(da&db, reverse)
+// since it is a Ripple Carry Adder(RCA 行波加法器), it should follow the rules:
+// 1. All XOR gates that inputs with x and y cannot every output to z (unless x0 and y0)
+// 2. All other gates should output to z
+// 3. All gates output to z should be XOR gates(except z45)
+// 4. All gates in (1) must has input from (3)
+// 5. at last , fix the sequence by removing the final OR gate
+// Credit to /u/piman51277 , it is hard to read though
+func (w *wire) check() []string {
+	res := set.New[string]()
+	fa0 := set.New[string]()
+	fa3 := set.New[ins]()
+	xors := w.getByOP(XOR)
+	for _, i := range xors {
+		if !strings.HasPrefix(i.in[0], "x") && !strings.HasPrefix(i.in[1], "x") {
+			continue
+		}
+		fa0.Add(i.out)
+		if i.in[0] == "x00" && i.in[1] == "y00" {
+			if i.out != "z00" {
+				// fmt.Printf("r1\n")
+				res.Add(i.out)
+			}
+			continue
+		} else {
+			if i.out == "z00" {
+				// fmt.Printf("r2\n")
+				res.Add(i.out)
+			}
+		}
+		if strings.HasPrefix(i.out, "z") {
+			fmt.Printf("r3\n")
+			res.Add(i.out)
+		}
+	}
+	for _, i := range xors {
+		if !strings.HasPrefix(i.in[0], "x") && !strings.HasPrefix(i.in[1], "x") {
+			fa3.Add(i)
+			if !strings.HasPrefix(i.out, "z") {
+				// fmt.Printf("r4\n")
+				res.Add(i.out)
+			}
+		}
+	}
+
+	for _, i := range w.instructions {
+		if strings.HasPrefix(i.out, "z") {
+			if i.out == "z45" {
+				if i.op != OR {
+					// fmt.Printf("r5\n")
+					res.Add(i.out)
+				}
+				continue
+			}
+			if i.op != XOR {
+				// fmt.Printf("r6\n")
+				res.Add(i.out)
+			}
+		}
+	}
+	var rest []string
+	fa0.Each(func(item string) bool {
+		if res.Has(item) {
+			return true
+		}
+		if item == "z00" {
+			return true
+		}
+		var has bool
+		fa3.Each(func(i ins) bool {
+			if i.in[0] == item || i.in[1] == item {
+				has = true
+				return false
+			}
+			return true
+		})
+		if !has {
+			// fmt.Printf("r7\n")
+			res.Add(item)
+			rest = append(rest, item)
+		}
+		return true
+	})
+
+	for _, o := range rest {
+		index := strings.TrimPrefix(getInsByOut(w.instructions, o).in[0], "x")
+		final2 := [2]string{}
+		fa3.Each(func(item ins) bool {
+			if item.out == "z"+index {
+				final2 = item.in
+				return false
+			}
+			return true
+		})
+		for i, f := range final2 {
+			if getInsByOut(w.instructions, f).op == OR {
+				if i == 0 {
+					res.Add(final2[1])
+				} else {
+					res.Add(final2[0])
+				}
+				break
+			}
+		}
+	}
+
+	r := res.List()
+	slices.Sort(r)
+	return r
+}
+
+func getInsByOut(instructions []ins, out string) ins {
+	for _, i := range instructions {
+		if i.out == out {
+			return i
+		}
+	}
+	panic("not found")
 }
 
 func decToBinary(dec int, reverse bool) []int {
@@ -302,5 +392,5 @@ func binaryToDecimal(bin []int, reverse bool) int {
 func main() {
 	ctx := context.Background()
 	p1(ctx)
-	// p2(ctx)
+	p2(ctx)
 }
