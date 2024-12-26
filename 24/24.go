@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/magejiCoder/magejiAoc/input"
+	"github.com/magejiCoder/magejiAoc/seq"
 )
 
 type ins struct {
@@ -47,6 +48,32 @@ func (w wire) buildMap() map[string]ins {
 	return m
 }
 
+type pair struct {
+	o1 string
+	o2 string
+}
+
+type pairs []pair
+
+func (w *wire) getPairs() [][]pair {
+	var ps []pair
+	for i := 0; i < len(w.instructions); i++ {
+		for j := i + 1; j < len(w.instructions); j++ {
+			ps = append(ps, pair{w.instructions[i].out, w.instructions[j].out})
+		}
+	}
+
+	// pick 4 pairs from ps to pairs
+	return seq.Combination(ps, 4)
+}
+
+// swap swaps 2 gates and wires 's output
+func (w *wire) swap(maxCount int) {
+	if w.swaps == nil {
+		w.swaps = make(map[string]string)
+	}
+}
+
 func (w *wire) apply(in ins) int {
 	// fmt.Printf("in: %v\n", in)
 	op1, op2 := in.in[0], in.in[1]
@@ -81,11 +108,16 @@ type wire struct {
 	inputs       map[string]int
 	instructions []ins
 	output       map[string]int
+	swaps        map[string]string
 }
 
 func (w *wire) run() {
 	for _, i := range w.instructions {
-		w.output[i.out] = w.apply(i)
+		o := i.out
+		if o2, ok := w.swaps[o]; ok {
+			o = o2
+		}
+		w.output[o] = w.apply(i)
 	}
 }
 
@@ -269,6 +301,6 @@ func binaryToDecimal(bin []int, reverse bool) int {
 
 func main() {
 	ctx := context.Background()
-	// p1(ctx)
-	p2(ctx)
+	p1(ctx)
+	// p2(ctx)
 }
